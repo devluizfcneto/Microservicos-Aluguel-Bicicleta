@@ -1,0 +1,193 @@
+version: "3.8"
+
+services:
+  # Serviços de aplicação
+  aluguel-service:
+    build:
+      context: ./aluguel-service
+      dockerfile: Dockerfile
+    container_name: aluguel-service
+    restart: unless-stopped
+    ports:
+      - "${PORT_ALUGUEL:-3000}:3000"
+    environment:
+      - POSTGRES_HOST_ALUGUEL=${POSTGRES_HOST_ALUGUEL:-db_aluguel}
+      - POSTGRES_PORT_ALUGUEL=${POSTGRES_PORT_ALUGUEL:-5432}
+      - POSTGRES_USER_ALUGUEL=${POSTGRES_USER_ALUGUEL:-aluguel}
+      - POSTGRES_PASSWORD_ALUGUEL=${POSTGRES_PASSWORD_ALUGUEL:-aluguel}
+      - POSTGRES_DB_ALUGUEL=${POSTGRES_DB_ALUGUEL:-microservico_aluguel_db}
+      - PORT_ALUGUEL=${PORT_ALUGUEL:-3000}
+    volumes:
+      - ./aluguel-service:/app
+      - /app/node_modules
+    depends_on:
+      db_aluguel:
+        condition: service_healthy
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  equipamento-service:
+    build:
+      context: ./equipamento-service
+      dockerfile: Dockerfile
+    container_name: equipamento-service
+    restart: unless-stopped
+    ports:
+      - "${PORT_EQUIPAMENTO:-3001}:3001"
+    environment:
+      - POSTGRES_HOST_EQUIPAMENTO=${POSTGRES_HOST_EQUIPAMENTO:-db_equipamento}
+      - POSTGRES_PORT_EQUIPAMENTO=${POSTGRES_PORT_EQUIPAMENTO:-5432}
+      - POSTGRES_USER_EQUIPAMENTO=${POSTGRES_USER_EQUIPAMENTO:-equipamento}
+      - POSTGRES_PASSWORD_EQUIPAMENTO=${POSTGRES_PASSWORD_EQUIPAMENTO:-equipamento}
+      - POSTGRES_DB_EQUIPAMENTO=${POSTGRES_DB_EQUIPAMENTO:-microservico_equipamento_db}
+      - PORT_EQUIPAMENTO=${PORT_EQUIPAMENTO:-3001}
+    volumes:
+      - ./equipamento-service:/app
+      - /app/node_modules
+    depends_on:
+      db_equipamento:
+        condition: service_healthy
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3001/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  externo-service:
+    build:
+      context: ./externo-service
+      dockerfile: Dockerfile
+    container_name: externo-service
+    restart: unless-stopped
+    ports:
+      - "${PORT_EXTERNO:-3002}:3002"
+    environment:
+      - POSTGRES_HOST_EXTERNO=${POSTGRES_HOST_EXTERNO:-db_externo}
+      - POSTGRES_PORT_EXTERNO=${POSTGRES_PORT_EXTERNO:-5432}
+      - POSTGRES_USER_EXTERNO=${POSTGRES_USER_EXTERNO:-externo}
+      - POSTGRES_PASSWORD_EXTERNO=${POSTGRES_PASSWORD_EXTERNO:-externo}
+      - POSTGRES_DB_EXTERNO=${POSTGRES_DB_EXTERNO:-microservico_externo_db}
+      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - PORT_EXTERNO=${PORT_EXTERNO:-3002}
+    volumes:
+      - ./externo-service:/app
+      - /app/node_modules
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db_externo:
+        condition: service_healthy
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3002/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Serviços de banco de dados
+  db_aluguel:
+    image: postgres:16-alpine
+    container_name: db_aluguel
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT_ALUGUEL_EXTERNAL:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER_ALUGUEL:-aluguel}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD_ALUGUEL:-aluguel}
+      - POSTGRES_DB=${POSTGRES_DB_ALUGUEL:-microservico_aluguel_db}
+    volumes:
+      - aluguel_db_data:/var/lib/postgresql/data
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER_ALUGUEL:-aluguel} -d ${POSTGRES_DB_ALUGUEL:-microservico_aluguel_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  db_equipamento:
+    image: postgres:16-alpine
+    container_name: db_equipamento
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT_EQUIPAMENTO_EXTERNAL:-5433}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER_EQUIPAMENTO:-equipamento}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD_EQUIPAMENTO:-equipamento}
+      - POSTGRES_DB=${POSTGRES_DB_EQUIPAMENTO:-microservico_equipamento_db}
+    volumes:
+      - equipamento_db_data:/var/lib/postgresql/data
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER_EQUIPAMENTO:-equipamento} -d ${POSTGRES_DB_EQUIPAMENTO:-microservico_equipamento_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  db_externo:
+    image: postgres:16-alpine
+    container_name: db_externo
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT_EXTERNO_EXTERNAL:-5434}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER_EXTERNO:-externo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD_EXTERNO:-externo}
+      - POSTGRES_DB=${POSTGRES_DB_EXTERNO:-microservico_externo_db}
+    volumes:
+      - externo_db_data:/var/lib/postgresql/data
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER_EXTERNO:-externo} -d ${POSTGRES_DB_EXTERNO:-microservico_externo_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Serviço de mensageria
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - aluguel-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  aluguel-network:
+    driver: bridge
+
+volumes:
+  aluguel_db_data:
+  equipamento_db_data:
+  externo_db_data:
+  rabbitmq_data:
